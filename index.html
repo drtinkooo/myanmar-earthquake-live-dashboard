@@ -1,0 +1,1063 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Myanmar Earthquake Live Dashboard</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            min-height: 100vh;
+        }
+        
+        .header {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .header h1 {
+            font-size: 1.5rem;
+            background: linear-gradient(90deg, #ff6b6b, #feca57);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .header-info {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+        
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #4ade80;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-dot.error {
+            background: #ef4444;
+            animation: none;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .last-update {
+            font-size: 0.85rem;
+            color: #a0a0a0;
+        }
+        
+        .container {
+            display: grid;
+            grid-template-columns: 1fr 400px;
+            grid-template-rows: auto 1fr;
+            gap: 20px;
+            padding: 20px;
+            height: calc(100vh - 70px);
+        }
+        
+        .stats-bar {
+            grid-column: 1 / -1;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+        }
+        
+        .stat-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+        
+        .stat-card h3 {
+            font-size: 0.85rem;
+            color: #a0a0a0;
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .stat-card .value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+        
+        .stat-card .sub-value {
+            font-size: 0.8rem;
+            color: #6b7280;
+            margin-top: 5px;
+        }
+        
+        .stat-card.total .value { color: #60a5fa; }
+        .stat-card.significant .value { color: #f87171; }
+        .stat-card.moderate .value { color: #fbbf24; }
+        .stat-card.latest .value { 
+            font-size: 1.2rem;
+            color: #4ade80; 
+        }
+        
+        .map-container {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            position: relative;
+        }
+        
+        #map {
+            height: 100%;
+            width: 100%;
+            min-height: 400px;
+        }
+        
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow: hidden;
+        }
+        
+        .panel {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden;
+        }
+        
+        .panel-header {
+            background: rgba(0, 0, 0, 0.2);
+            padding: 15px;
+            font-weight: 600;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .panel-content {
+            padding: 15px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        
+        .earthquake-list {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .earthquake-list .panel-content {
+            flex: 1;
+            max-height: none;
+        }
+        
+        .earthquake-item {
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            transition: all 0.3s;
+            border-left: 4px solid transparent;
+        }
+        
+        .earthquake-item:hover {
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateX(5px);
+        }
+        
+        .earthquake-item.mag-high {
+            border-left-color: #ef4444;
+        }
+        
+        .earthquake-item.mag-medium {
+            border-left-color: #f97316;
+        }
+        
+        .earthquake-item.mag-low {
+            border-left-color: #22c55e;
+        }
+        
+        .earthquake-item .mag {
+            font-size: 1.5rem;
+            font-weight: bold;
+            float: left;
+            margin-right: 12px;
+            min-width: 50px;
+            text-align: center;
+        }
+        
+        .earthquake-item .details {
+            overflow: hidden;
+        }
+        
+        .earthquake-item .location {
+            font-size: 0.9rem;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        
+        .earthquake-item .time {
+            font-size: 0.75rem;
+            color: #6b7280;
+        }
+        
+        .earthquake-item .depth {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            margin-top: 2px;
+        }
+        
+        .chart-container {
+            height: 200px;
+            padding: 10px;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .control-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 0.85rem;
+        }
+        
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+        
+        .control-btn.active {
+            background: #3b82f6;
+            border-color: #3b82f6;
+        }
+        
+        .refresh-btn {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            border: none;
+        }
+        
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #3b82f6;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        
+        .no-data {
+            text-align: center;
+            padding: 40px;
+            color: #6b7280;
+        }
+        
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 1000;
+        }
+        
+        .legend h4 {
+            margin-bottom: 10px;
+            font-size: 0.85rem;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 5px;
+            font-size: 0.8rem;
+        }
+        
+        .legend-circle {
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        .legend-line {
+            display: inline-block;
+            height: 3px;
+            width: 25px;
+        }
+        
+        .legend-section {
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .layer-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+            font-size: 0.8rem;
+            cursor: pointer;
+        }
+        
+        .layer-toggle input[type="checkbox"] {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+        
+        /* Scrollbar styling */
+        .panel-content::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .panel-content::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .panel-content::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+        }
+        
+        .filter-section {
+            padding: 15px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .filter-section label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            color: #a0a0a0;
+        }
+        
+        .filter-section select,
+        .filter-section input {
+            width: 100%;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 6px;
+            color: #fff;
+            font-size: 0.9rem;
+        }
+        
+        .filter-section select option {
+            background: #1a1a2e;
+        }
+        
+        .time-range-btns {
+            display: flex;
+            gap: 5px;
+            flex-wrap: wrap;
+        }
+        
+        .time-range-btns .control-btn {
+            flex: 1;
+            text-align: center;
+            padding: 6px 10px;
+            font-size: 0.75rem;
+        }
+        
+        @media (max-width: 1024px) {
+            .container {
+                grid-template-columns: 1fr;
+            }
+            
+            .sidebar {
+                order: -1;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>Myanmar Earthquake Live Dashboard</h1>
+        <div class="header-info">
+            <div class="status-indicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Connected</span>
+            </div>
+            <span class="last-update" id="lastUpdate">Last update: --</span>
+            <button class="control-btn refresh-btn" onclick="fetchEarthquakeData()">
+                Refresh Now
+            </button>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="stats-bar">
+            <div class="stat-card total">
+                <h3>Total Earthquakes</h3>
+                <div class="value" id="totalCount">--</div>
+                <div class="sub-value" id="timeRange">Past year</div>
+            </div>
+            <div class="stat-card significant">
+                <h3>Significant (M5.0+)</h3>
+                <div class="value" id="significantCount">--</div>
+                <div class="sub-value">Potential damage</div>
+            </div>
+            <div class="stat-card moderate">
+                <h3>Moderate (M4.0-4.9)</h3>
+                <div class="value" id="moderateCount">--</div>
+                <div class="sub-value">Widely felt</div>
+            </div>
+            <div class="stat-card latest">
+                <h3>Latest Event</h3>
+                <div class="value" id="latestEvent">--</div>
+                <div class="sub-value" id="latestTime">--</div>
+            </div>
+        </div>
+        
+        <div class="map-container">
+            <div id="map"></div>
+            <div class="legend">
+                <h4>Magnitude Scale</h4>
+                <div class="legend-item">
+                    <span class="legend-circle" style="width: 30px; height: 30px; background: rgba(239, 68, 68, 0.7);"></span>
+                    <span>M5.0+ (Major)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-circle" style="width: 22px; height: 22px; background: rgba(249, 115, 22, 0.7);"></span>
+                    <span>M4.0-4.9 (Moderate)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-circle" style="width: 16px; height: 16px; background: rgba(234, 179, 8, 0.7);"></span>
+                    <span>M3.0-3.9 (Minor)</span>
+                </div>
+                <div class="legend-item">
+                    <span class="legend-circle" style="width: 10px; height: 10px; background: rgba(34, 197, 94, 0.7);"></span>
+                    <span>M2.5-2.9 (Light)</span>
+                </div>
+                <div class="legend-section">
+                    <h4>Tectonic Features</h4>
+                    <div class="legend-item">
+                        <span class="legend-line" style="background: #ff6b35; border-top: 2px dashed #ff6b35;"></span>
+                        <span>Fault Lines</span>
+                    </div>
+                    <label class="layer-toggle">
+                        <input type="checkbox" id="tectonicToggle" checked onchange="toggleTectonicLayer()">
+                        <span>Show Tectonic Layer</span>
+                    </label>
+                </div>
+            </div>
+            <div class="loading-overlay" id="mapLoading" style="display: none;">
+                <div class="spinner"></div>
+            </div>
+        </div>
+        
+        <div class="sidebar">
+            <div class="panel">
+                <div class="panel-header">
+                    <span>Filters</span>
+                </div>
+                <div class="filter-section">
+                    <label>Time Range</label>
+                    <div class="time-range-btns">
+                        <button class="control-btn" data-days="7" onclick="setTimeRange(7)">7 Days</button>
+                        <button class="control-btn" data-days="30" onclick="setTimeRange(30)">30 Days</button>
+                        <button class="control-btn" data-days="90" onclick="setTimeRange(90)">90 Days</button>
+                        <button class="control-btn active" data-days="365" onclick="setTimeRange(365)">1 Year</button>
+                    </div>
+                </div>
+                <div class="filter-section">
+                    <label>Minimum Magnitude</label>
+                    <select id="minMagnitude" onchange="applyFilters()">
+                        <option value="0">All Magnitudes</option>
+                        <option value="2.5" selected>2.5+</option>
+                        <option value="3.0">3.0+</option>
+                        <option value="4.0">4.0+</option>
+                        <option value="5.0">5.0+</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="panel">
+                <div class="panel-header">
+                    <span>Magnitude Distribution</span>
+                </div>
+                <div class="chart-container">
+                    <canvas id="magChart"></canvas>
+                </div>
+            </div>
+            
+            <div class="panel earthquake-list">
+                <div class="panel-header">
+                    <span>Recent Earthquakes</span>
+                    <span id="listCount">0</span>
+                </div>
+                <div class="panel-content" id="earthquakeList">
+                    <div class="no-data">Loading earthquake data...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Myanmar bounding box coordinates
+        const MYANMAR_BOUNDS = {
+            minLatitude: 9.5,
+            maxLatitude: 28.5,
+            minLongitude: 92.0,
+            maxLongitude: 101.5
+        };
+        
+        // Configuration
+        const CONFIG = {
+            refreshInterval: 60000, // 1 minute
+            defaultDays: 365,
+            defaultMinMagnitude: 2.5
+        };
+        
+        // State
+        let earthquakeData = [];
+        let filteredData = [];
+        let currentDays = CONFIG.defaultDays;
+        let map = null;
+        let markersLayer = null;
+        let tectonicLayer = null;
+        let magChart = null;
+        let refreshTimer = null;
+        
+        // Tectonic GeoJSON URL
+        const TECTONIC_GEOJSON_URL = 'https://raw.githubusercontent.com/drtinkooo/myanmar-earthquake-archive/main/Myanmar_Tectonic_Map_2011.geojson';
+        
+        // Initialize the map
+        function initMap() {
+            // Center on Myanmar
+            const myanmarCenter = [21.0, 96.5];
+            
+            map = L.map('map').setView(myanmarCenter, 5);
+            
+            // Dark theme map tiles
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
+                subdomains: 'abcd',
+                maxZoom: 19
+            }).addTo(map);
+            
+            // Add Myanmar boundary rectangle
+            const myanmarRect = L.rectangle([
+                [MYANMAR_BOUNDS.minLatitude, MYANMAR_BOUNDS.minLongitude],
+                [MYANMAR_BOUNDS.maxLatitude, MYANMAR_BOUNDS.maxLongitude]
+            ], {
+                color: '#3b82f6',
+                weight: 2,
+                fillOpacity: 0.05,
+                dashArray: '5, 10'
+            }).addTo(map);
+            
+            // Initialize markers layer
+            markersLayer = L.layerGroup().addTo(map);
+            
+            // Load tectonic data
+            loadTectonicData();
+        }
+        
+        // Load tectonic lineaments data
+        async function loadTectonicData() {
+            try {
+                const response = await fetch(TECTONIC_GEOJSON_URL);
+                if (!response.ok) {
+                    throw new Error(`Failed to load tectonic data: ${response.status}`);
+                }
+                
+                const geojsonData = await response.json();
+                
+                // Create the tectonic layer with styling
+                tectonicLayer = L.geoJSON(geojsonData, {
+                    style: function(feature) {
+                        return {
+                            color: '#ff6b35',
+                            weight: 2,
+                            opacity: 0.7,
+                            dashArray: '5, 5'
+                        };
+                    },
+                    onEachFeature: function(feature, layer) {
+                        // Create popup content for fault lines
+                        const props = feature.properties;
+                        let popupContent = '<div style="min-width: 150px; font-family: sans-serif;">';
+                        popupContent += '<h4 style="margin: 0 0 8px 0; color: #ff6b35;">Tectonic Feature</h4>';
+                        
+                        if (props.NAME) {
+                            popupContent += `<p style="margin: 4px 0;"><strong>Name:</strong> ${props.NAME}</p>`;
+                        }
+                        if (props.SEGMENT) {
+                            popupContent += `<p style="margin: 4px 0;"><strong>Segment:</strong> ${props.SEGMENT}</p>`;
+                        }
+                        if (props.TYPE_DESCR) {
+                            popupContent += `<p style="margin: 4px 0;"><strong>Type:</strong> ${props.TYPE_DESCR}</p>`;
+                        }
+                        if (props.CODE) {
+                            popupContent += `<p style="margin: 4px 0;"><strong>Code:</strong> ${props.CODE}</p>`;
+                        }
+                        
+                        popupContent += '</div>';
+                        layer.bindPopup(popupContent);
+                        
+                        // Highlight on hover
+                        layer.on({
+                            mouseover: function(e) {
+                                const layer = e.target;
+                                layer.setStyle({
+                                    weight: 4,
+                                    opacity: 1
+                                });
+                            },
+                            mouseout: function(e) {
+                                tectonicLayer.resetStyle(e.target);
+                            }
+                        });
+                    }
+                });
+                
+                // Add tectonic layer BELOW markers (add it first, then re-add markers on top)
+                tectonicLayer.addTo(map);
+                
+                // Ensure markers layer is on top
+                markersLayer.bringToFront();
+                
+                console.log('Tectonic layer loaded successfully');
+                
+            } catch (error) {
+                console.error('Error loading tectonic data:', error);
+            }
+        }
+        
+        // Toggle tectonic layer visibility
+        function toggleTectonicLayer() {
+            const checkbox = document.getElementById('tectonicToggle');
+            
+            if (tectonicLayer) {
+                if (checkbox.checked) {
+                    map.addLayer(tectonicLayer);
+                    // Keep markers on top
+                    markersLayer.bringToFront();
+                } else {
+                    map.removeLayer(tectonicLayer);
+                }
+            }
+        }
+        
+        // Get color based on magnitude
+        function getMagnitudeColor(mag) {
+            if (mag >= 5.0) return '#ef4444';
+            if (mag >= 4.0) return '#f97316';
+            if (mag >= 3.0) return '#eab308';
+            return '#22c55e';
+        }
+        
+        // Get marker size based on magnitude
+        function getMarkerSize(mag) {
+            return Math.max(6, mag * 5);
+        }
+        
+        // Format time ago
+        function timeAgo(timestamp) {
+            const seconds = Math.floor((Date.now() - timestamp) / 1000);
+            
+            const intervals = {
+                year: 31536000,
+                month: 2592000,
+                week: 604800,
+                day: 86400,
+                hour: 3600,
+                minute: 60
+            };
+            
+            for (const [unit, secondsInUnit] of Object.entries(intervals)) {
+                const interval = Math.floor(seconds / secondsInUnit);
+                if (interval >= 1) {
+                    return `${interval} ${unit}${interval > 1 ? 's' : ''} ago`;
+                }
+            }
+            return 'Just now';
+        }
+        
+        // Format date
+        function formatDate(timestamp) {
+            return new Date(timestamp).toLocaleString('en-US', {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+        
+        // Build API URL
+        function buildApiUrl() {
+            const endTime = new Date().toISOString();
+            const startTime = new Date(Date.now() - currentDays * 24 * 60 * 60 * 1000).toISOString();
+            const minMag = document.getElementById('minMagnitude').value;
+            
+            const params = new URLSearchParams({
+                format: 'geojson',
+                starttime: startTime,
+                endtime: endTime,
+                minlatitude: MYANMAR_BOUNDS.minLatitude,
+                maxlatitude: MYANMAR_BOUNDS.maxLatitude,
+                minlongitude: MYANMAR_BOUNDS.minLongitude,
+                maxlongitude: MYANMAR_BOUNDS.maxLongitude,
+                minmagnitude: minMag,
+                orderby: 'time'
+            });
+            
+            return `https://earthquake.usgs.gov/fdsnws/event/1/query?${params}`;
+        }
+        
+        // Fetch earthquake data
+        async function fetchEarthquakeData() {
+            const loading = document.getElementById('mapLoading');
+            loading.style.display = 'flex';
+            
+            try {
+                const url = buildApiUrl();
+                console.log('Fetching:', url);
+                
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                earthquakeData = data.features || [];
+                
+                updateStatus(true);
+                updateDashboard();
+                
+            } catch (error) {
+                console.error('Error fetching earthquake data:', error);
+                updateStatus(false, error.message);
+            } finally {
+                loading.style.display = 'none';
+            }
+        }
+        
+        // Update connection status
+        function updateStatus(connected, errorMessage = '') {
+            const dot = document.getElementById('statusDot');
+            const text = document.getElementById('statusText');
+            const updateTime = document.getElementById('lastUpdate');
+            
+            if (connected) {
+                dot.classList.remove('error');
+                text.textContent = 'Connected';
+                updateTime.textContent = `Last update: ${formatDate(Date.now())}`;
+            } else {
+                dot.classList.add('error');
+                text.textContent = 'Error';
+                updateTime.textContent = `Error: ${errorMessage}`;
+            }
+        }
+        
+        // Update the entire dashboard
+        function updateDashboard() {
+            filteredData = earthquakeData;
+            
+            updateStatistics();
+            updateMap();
+            updateEarthquakeList();
+            updateChart();
+        }
+        
+        // Update statistics cards
+        function updateStatistics() {
+            const total = filteredData.length;
+            const significant = filteredData.filter(eq => eq.properties.mag >= 5.0).length;
+            const moderate = filteredData.filter(eq => eq.properties.mag >= 4.0 && eq.properties.mag < 5.0).length;
+            
+            document.getElementById('totalCount').textContent = total;
+            document.getElementById('significantCount').textContent = significant;
+            document.getElementById('moderateCount').textContent = moderate;
+            
+            const timeRangeText = currentDays <= 7 ? `Past ${currentDays} days` :
+                                  currentDays <= 30 ? 'Past month' :
+                                  currentDays <= 90 ? 'Past 3 months' : 'Past year';
+            document.getElementById('timeRange').textContent = timeRangeText;
+            
+            if (filteredData.length > 0) {
+                const latest = filteredData[0];
+                document.getElementById('latestEvent').textContent = `M${latest.properties.mag.toFixed(1)}`;
+                document.getElementById('latestTime').textContent = timeAgo(latest.properties.time);
+            } else {
+                document.getElementById('latestEvent').textContent = 'No events';
+                document.getElementById('latestTime').textContent = '--';
+            }
+        }
+        
+        // Update map markers
+        function updateMap() {
+            markersLayer.clearLayers();
+            
+            filteredData.forEach(earthquake => {
+                const coords = earthquake.geometry.coordinates;
+                const props = earthquake.properties;
+                const mag = props.mag || 0;
+                const depth = coords[2];
+                
+                const color = getMagnitudeColor(mag);
+                const size = getMarkerSize(mag);
+                
+                const marker = L.circleMarker([coords[1], coords[0]], {
+                    radius: size,
+                    fillColor: color,
+                    color: '#fff',
+                    weight: 1,
+                    opacity: 0.8,
+                    fillOpacity: 0.6
+                });
+                
+                const popupContent = `
+                    <div style="min-width: 200px; font-family: sans-serif;">
+                        <h3 style="margin: 0 0 10px 0; color: ${color};">M${mag.toFixed(1)} Earthquake</h3>
+                        <p style="margin: 5px 0;"><strong>Location:</strong> ${props.place}</p>
+                        <p style="margin: 5px 0;"><strong>Time:</strong> ${formatDate(props.time)}</p>
+                        <p style="margin: 5px 0;"><strong>Depth:</strong> ${depth.toFixed(1)} km</p>
+                        <p style="margin: 5px 0;"><strong>Status:</strong> ${props.status}</p>
+                        ${props.tsunami ? '<p style="margin: 5px 0; color: #ef4444;"><strong>Tsunami Warning!</strong></p>' : ''}
+                        <a href="${props.url}" target="_blank" style="color: #3b82f6;">More details</a>
+                    </div>
+                `;
+                
+                marker.bindPopup(popupContent);
+                markersLayer.addLayer(marker);
+            });
+        }
+        
+        // Update earthquake list
+        function updateEarthquakeList() {
+            const listContainer = document.getElementById('earthquakeList');
+            const listCount = document.getElementById('listCount');
+            
+            listCount.textContent = filteredData.length;
+            
+            if (filteredData.length === 0) {
+                listContainer.innerHTML = '<div class="no-data">No earthquakes found in this region for the selected time range.</div>';
+                return;
+            }
+            
+            const listHtml = filteredData.slice(0, 50).map(earthquake => {
+                const props = earthquake.properties;
+                const coords = earthquake.geometry.coordinates;
+                const mag = props.mag || 0;
+                const depth = coords[2];
+                
+                const magClass = mag >= 5.0 ? 'mag-high' : 
+                                 mag >= 4.0 ? 'mag-medium' : 'mag-low';
+                
+                return `
+                    <div class="earthquake-item ${magClass}" 
+                         onclick="focusEarthquake(${coords[1]}, ${coords[0]}, ${mag})">
+                        <div class="mag" style="color: ${getMagnitudeColor(mag)}">
+                            ${mag.toFixed(1)}
+                        </div>
+                        <div class="details">
+                            <div class="location" title="${props.place}">${props.place || 'Unknown location'}</div>
+                            <div class="time">${timeAgo(props.time)}</div>
+                            <div class="depth">Depth: ${depth.toFixed(1)} km</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            listContainer.innerHTML = listHtml;
+        }
+        
+        // Focus on a specific earthquake
+        function focusEarthquake(lat, lng, mag) {
+            map.setView([lat, lng], 8);
+            
+            // Find and open the popup for this marker
+            markersLayer.eachLayer(layer => {
+                const layerLatLng = layer.getLatLng();
+                if (Math.abs(layerLatLng.lat - lat) < 0.001 && Math.abs(layerLatLng.lng - lng) < 0.001) {
+                    layer.openPopup();
+                }
+            });
+        }
+        
+        // Update magnitude distribution chart
+        function updateChart() {
+            const ctx = document.getElementById('magChart').getContext('2d');
+            
+            // Group by magnitude ranges
+            const ranges = {
+                '2.5-2.9': 0,
+                '3.0-3.9': 0,
+                '4.0-4.9': 0,
+                '5.0-5.9': 0,
+                '6.0+': 0
+            };
+            
+            filteredData.forEach(eq => {
+                const mag = eq.properties.mag || 0;
+                if (mag >= 6.0) ranges['6.0+']++;
+                else if (mag >= 5.0) ranges['5.0-5.9']++;
+                else if (mag >= 4.0) ranges['4.0-4.9']++;
+                else if (mag >= 3.0) ranges['3.0-3.9']++;
+                else if (mag >= 2.5) ranges['2.5-2.9']++;
+            });
+            
+            const colors = ['#22c55e', '#eab308', '#f97316', '#ef4444', '#dc2626'];
+            
+            if (magChart) {
+                magChart.destroy();
+            }
+            
+            magChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(ranges),
+                    datasets: [{
+                        label: 'Earthquakes',
+                        data: Object.values(ranges),
+                        backgroundColor: colors,
+                        borderColor: colors.map(c => c),
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            },
+                            ticks: {
+                                color: '#a0a0a0',
+                                stepSize: 1
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#a0a0a0'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Set time range
+        function setTimeRange(days) {
+            currentDays = days;
+            
+            // Update button states
+            document.querySelectorAll('.time-range-btns .control-btn').forEach(btn => {
+                btn.classList.toggle('active', parseInt(btn.dataset.days) === days);
+            });
+            
+            fetchEarthquakeData();
+        }
+        
+        // Apply filters
+        function applyFilters() {
+            fetchEarthquakeData();
+        }
+        
+        // Start auto-refresh
+        function startAutoRefresh() {
+            if (refreshTimer) {
+                clearInterval(refreshTimer);
+            }
+            
+            refreshTimer = setInterval(() => {
+                console.log('Auto-refreshing data...');
+                fetchEarthquakeData();
+            }, CONFIG.refreshInterval);
+        }
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            initMap();
+            fetchEarthquakeData();
+            startAutoRefresh();
+            
+            console.log('Myanmar Earthquake Dashboard initialized');
+            console.log('Auto-refresh interval:', CONFIG.refreshInterval / 1000, 'seconds');
+        });
+    </script>
+</body>
+</html>
