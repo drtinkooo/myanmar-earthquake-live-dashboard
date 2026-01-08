@@ -44,7 +44,7 @@ Simply open `myanmar-earthquake-dashboard.html` in any modern web browser. No se
 
 ### Option 2: Clone Repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/myanmar-earthquake-dashboard.git
+git clone https://github.com/YOUR_USERNAME/myanmar-earthquake-live-dashboard.git
 cd myanmar-earthquake-dashboard
 # Open myanmar-earthquake-dashboard.html in your browser
 ```
@@ -54,7 +54,7 @@ Host directly on GitHub Pages for free:
 1. Fork this repository
 2. Go to Settings > Pages
 3. Select "main" branch and save
-4. Access at `https://YOUR_USERNAME.github.io/myanmar-earthquake-dashboard/`
+4. Access at `https://YOUR_USERNAME.github.io/myanmar-earthquake-live-dashboard/`
 
 ## Usage
 
