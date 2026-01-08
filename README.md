@@ -160,7 +160,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **USGS Earthquake Hazards Program** for providing free, real-time earthquake data
 - **Leaflet.js** community for the excellent mapping library
 - **Chart.js** team for the charting library
-- **Myanmar Geological Survey** for tectonic data
+- **Myanmar Geosciences Society** for tectonic data
 
 ## Related Projects
 
